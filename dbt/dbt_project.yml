@@ -1,0 +1,11 @@
+name: 'weather'
+version: '1.0.0'
+profile: 'weather_project_conn'
+
+models:
+  weather:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table 
+    

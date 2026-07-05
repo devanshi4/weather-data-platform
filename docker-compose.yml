@@ -1,0 +1,15 @@
+services:
+  dbt:
+    build:
+      context: .
+      dockerfile: dbt.Dockerfile
+    image: weather-dbt
+    working_dir: /usr/app/dbt
+    volumes:
+      - ./dbt:/usr/app/dbt
+      - ./keys:/usr/app/keys
+    env_file:
+      - .env
+    environment:
+      DBT_PROFILES_DIR: /usr/app/dbt
+    entrypoint: dbt
