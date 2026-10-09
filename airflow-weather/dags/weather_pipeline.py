@@ -1,6 +1,5 @@
 from airflow import DAG
 from airflow.providers.snowflake.operators.snowflake import SQLExecuteQueryOperator
-from airflow.operators.bash import BashOperator
 from datetime import datetime
 
 COPY_INTO_SQL = """
@@ -13,6 +12,8 @@ COPY INTO WEATHER_DB.RAW.WEATHER_RAW (raw_json, source_file)
   ON_ERROR = 'ABORT_STATEMENT';
 """
 
+# Loads the day's raw JSON files from the S3 external stage into Snowflake.
+# dbt transformations run separately from the dbt container (see README).
 with DAG(
     dag_id="weather_pipeline",
     start_date=datetime(2024, 1, 1),
@@ -26,15 +27,3 @@ with DAG(
         conn_id="snowflake_default",
         sql=COPY_INTO_SQL,
     )
-
-    dbt_run = BashOperator(
-        task_id="dbt_run",
-        bash_command="echo 'STEP 2: Running dbt transformations...'",
-    )
-
-    dbt_test = BashOperator(
-        task_id="dbt_test",
-        bash_command="echo 'STEP 3: Running dbt tests...'",
-    )
-
-    copy_into_snowflake >> dbt_run >> dbt_test
