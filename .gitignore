@@ -1,7 +1,26 @@
+# Python
 venv/
+.venv/
 __pycache__/
 *.pyc
+
+# Secrets — never commit
 .env
+keys/
+*.p8
+*.pem
+
+# dbt build output
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml
+
+# Airflow runtime files
+airflow-weather/logs/
+airflow-weather/config/airflow.cfg
+airflow-weather/plugins/
+
+# Editors / OS
 .vscode/
 .DS_Store
-.keys/

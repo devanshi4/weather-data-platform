@@ -26,7 +26,7 @@ Built to production patterns: **idempotent loads, incremental processing, data q
   Snowflake (ANALYTICS schema)
 ```
 
-**Flow:** A scheduled AWS Lambda pulls hourly weather for several cities and lands the raw JSON in S3, partitioned by date. Airflow orchestrates loading that raw data into Snowflake via `COPY INTO`. dbt then transforms the raw JSON into a clean star schema — a staging layer that flattens the nested API response, and fact/dimension tables — with automated data quality tests between layers.
+**Flow:** Once a day, EventBridge triggers an AWS Lambda that pulls the day's hourly weather readings for three cities (Chicago, New York, Denver) from Open-Meteo and lands the raw JSON in S3, partitioned by pull date. An Airflow DAG loads the new files into Snowflake with `COPY INTO`. dbt then transforms the raw JSON into a star schema — a staging view that flattens the nested API response, plus fact and dimension tables — with data quality tests between layers. dbt runs from its own container (see *Running it*).
 
 ---
 
@@ -83,10 +83,31 @@ Built to production patterns: **idempotent loads, incremental processing, data q
 │   ├── dbt_project.yml
 │   └── profiles.yml
 ├── dbt.Dockerfile           # Runs dbt in a container
-└── airflow/
-    ├── dags/                # weather_pipeline DAG
+├── docker-compose.yml       # dbt container (mounts ./dbt and ./keys)
+├── .env.example             # Required environment variables
+├── keys/                    # Snowflake key pair — git-ignored, never committed
+└── airflow-weather/
+    ├── dags/                # weather_pipeline DAG (COPY INTO Snowflake)
+    ├── Dockerfile           # Airflow image + Snowflake provider
     └── docker-compose.yaml  # Airflow stack
 ```
+
+---
+
+## Running it
+
+1. Copy `.env.example` to `.env` and fill in your AWS and Snowflake values.
+2. Generate a Snowflake key pair into `keys/` (git-ignored) and register the public key on your Snowflake user:
+   ```bash
+   openssl genrsa 2048 | openssl pkcs8 -topk8 -v2 des3 -inform PEM -out keys/rsa_key.p8
+   openssl rsa -in keys/rsa_key.p8 -pubout -out keys/rsa_key.pub
+   ```
+3. Deploy `lambda_function.py` with an EventBridge daily rule (or run `api.py` locally to land a day of data in S3).
+4. Start Airflow from `airflow-weather/` with `docker compose up`, add a `snowflake_default` connection, and trigger `weather_pipeline` to load raw files.
+5. Build and test the models with dbt:
+   ```bash
+   docker compose run --rm dbt build
+   ```
 
 ---
 
@@ -96,12 +117,11 @@ Built to production patterns: **idempotent loads, incremental processing, data q
 - Idempotent and incremental data loading
 - Entity/grain modeling (star schema, surrogate keys)
 - Data quality testing and referential integrity
-- Pipeline orchestration with dependency management
+- Pipeline orchestration (Airflow) and scheduled serverless extraction (EventBridge + Lambda)
 - Key-pair authentication for warehouse connections
-- Serverless extraction with scheduled triggers
 
 ---
 
 ## Notes
 
-This is a learning project built to practice production data engineering patterns end to end. The extraction and load layers are fully automated (Lambda on a schedule; Airflow-orchestrated `COPY INTO`); dbt transformations run against Snowflake and can be triggered on a schedule or wired into the Airflow DAG via a `BashOperator` / dbt task group.
+This is a learning project built to practice production data engineering patterns end to end. Extraction (Lambda on a schedule) and loading (Airflow-orchestrated `COPY INTO`) are automated; dbt transformations run against Snowflake from the dbt container. Next step: trigger `dbt build` from the Airflow DAG so a single run covers load → transform → test.
